@@ -14,6 +14,7 @@ Liquidity comes from PancakeSwap. Cinder holds no pools.
 ## Contracts
 
 - `CinderRouter`: takes the fee from the swap input, splits it, forwards the rest to PancakeSwap V2. Fee is hard-capped at 1%.
+- `CinderStaking`: stake token A for a share of fees in BNB. Tiers: flexible 1x, 90 days 1.5x, 180 days 2x. 30-day unstake cooldown, or instant exit with 10% burned.
 
 ## Develop
 
