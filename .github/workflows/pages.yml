@@ -2,7 +2,7 @@ name: Deploy testnet demo
 on:
   push:
     branches: [main]
-    paths: ["web/**"]
+    paths: ["web/**", "offline/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,6 +18,6 @@ jobs:
       - uses: actions/configure-pages@v5
         with: { enablement: true }
       - uses: actions/upload-pages-artifact@v3
-        with: { path: web }
+        with: { path: offline }  # demo offline; ganti ke web untuk online lagi
       - id: d
         uses: actions/deploy-pages@v4
