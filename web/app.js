@@ -121,8 +121,15 @@ function status(id, msg, hash) {
 }
 
 async function send(id, label, req) {
+  if ((await window.ethereum.request({ method: "eth_chainId" })) !== "0x61") {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x61" }] });
+  }
   status(id, label + "… confirm in wallet");
-  const hash = await wallet.writeContract(req);
+  // Simulate + estimate on our own RPC so the wallet's RPC can't fail the estimate.
+  const sim = { ...req, account };
+  await pub.simulateContract(sim);
+  const [gas, gasPrice] = await Promise.all([pub.estimateContractGas(sim), pub.getGasPrice()]);
+  const hash = await wallet.writeContract({ ...req, gas: (gas * 13n) / 10n, gasPrice });
   status(id, label + " pending", hash);
   const r = await pub.waitForTransactionReceipt({ hash });
   if (r.status !== "success") throw new Error(label + " failed");
