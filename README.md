@@ -24,3 +24,14 @@ forge install OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-git
 forge install foundry-rs/forge-std --no-git
 forge test
 ```
+
+## Deploy to BSC testnet
+
+Get testnet BNB from https://testnet.bnbchain.org/faucet-smart, import a throwaway deployer key into a Foundry keystore (`cast wallet import deployer --interactive`), then:
+
+```bash
+TREASURY=0xYourFeeWallet LP_TOKENS=1000000000000000000000000 LP_BNB=100000000000000000 \
+forge script script/DeployTestnet.s.sol --rpc-url https://bsc-testnet-rpc.publicnode.com --broadcast --account deployer
+```
+
+Never commit a private key. `.env` is gitignored.
