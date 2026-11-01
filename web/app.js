@@ -6,6 +6,7 @@ const A = {
   pancake: "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
   wbnb: "0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd",
   token: "0x1B5A855A4827402E1bC92F33F7f5221cD64b7C0f",
+  routerBlock: 140012030n,
   staking: "0xbb2AC381DAcCD4B077811Ed5518ed55d98Eefa39",
   stakingSink: "0xE5e6039266520D60757FbCdc104Ef68c91994D70",
   dead: "0x000000000000000000000000000000000000dEaD",
@@ -18,7 +19,9 @@ const routerAbi = parseAbi([
   "function quoteFee(uint256) view returns (uint256 fee, uint256 amountAfterFee)",
   "function swapExactBNBForTokens(uint256,address[],address,uint256) payable",
   "function swapExactTokensForBNB(uint256,uint256,address[],address,uint256)",
+  "function referralBps() view returns (uint16)",
 ]);
+const swappedEvent = parseAbi(["event Swapped(address indexed user, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 fee, address referrer)"])[0];
 const pancakeAbi = parseAbi(["function getAmountsOut(uint256,address[]) view returns (uint256[])"]);
 const erc20Abi = parseAbi([
   "function balanceOf(address) view returns (uint256)",
@@ -45,6 +48,8 @@ document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
   document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x === b));
   $("swap").classList.toggle("hidden", b.dataset.tab !== "swap");
   $("stake").classList.toggle("hidden", b.dataset.tab !== "stake");
+  $("board").classList.toggle("hidden", b.dataset.tab !== "board");
+  if (b.dataset.tab === "board") loadBoard();
 });
 
 // wallet
@@ -61,6 +66,7 @@ async function connect() {
   wallet = createWalletClient({ account, chain: bscTestnet, transport: custom(window.ethereum) });
   $("connect").textContent = addr.slice(0, 6) + "…" + addr.slice(-4);
   refresh();
+  if (!$("board").classList.contains("hidden")) loadBoard();
 }
 $("connect").onclick = () => connect().catch((e) => status("swapStatus", e.shortMessage || e.message));
 window.ethereum?.on?.("accountsChanged", () => connect());
@@ -189,4 +195,74 @@ async function loadStats() {
   } catch { /* stats are optional */ }
 }
 (window.requestIdleCallback || setTimeout)(loadStats);
+
+// leaderboard: built in the browser from the router's Swapped events (no backend).
+// Logs are cached in localStorage and fetched in 50k-block chunks (public RPC limit).
+const CHUNK = 49999n;
+const CACHE = "cinder.swaps.v1";
+async function swapLogs() {
+  let c = { to: (A.routerBlock - 1n).toString(), logs: [] };
+  try { c = JSON.parse(localStorage.getItem(CACHE)) || c; } catch {}
+  const head = await pub.getBlockNumber();
+  let from = BigInt(c.to) + 1n;
+  while (from <= head) {
+    const to = from + CHUNK > head ? head : from + CHUNK;
+    const logs = await pub.getLogs({ address: A.router, event: swappedEvent, fromBlock: from, toBlock: to });
+    for (const l of logs) {
+      const a = l.args;
+      c.logs.push([a.user, a.tokenIn, a.amountIn.toString(), a.fee.toString(), a.referrer]);
+    }
+    c.to = to.toString();
+    from = to + 1n;
+  }
+  try { localStorage.setItem(CACHE, JSON.stringify(c)); } catch {}
+  return c.logs;
+}
+
+let boardBusy = false;
+async function loadBoard() {
+  if (boardBusy) return; boardBusy = true;
+  try {
+    const [logs, refBps] = await Promise.all([
+      swapLogs(),
+      pub.readContract({ address: A.router, abi: routerAbi, functionName: "referralBps" }),
+    ]);
+    // Value token-side swaps in tBNB at the current pool price (testnet has one pair).
+    const one = parseEther("1");
+    let tokPrice = 0n;
+    try { tokPrice = (await pub.readContract({ address: A.pancake, abi: pancakeAbi, functionName: "getAmountsOut", args: [one, [A.token, A.wbnb]] }))[1]; } catch {}
+    const inBnb = (tokenIn, v) => (tokenIn.toLowerCase() === ZERO ? v : (v * tokPrice) / one);
+    const users = new Map(); const refEarned = new Map();
+    for (const [user, tokenIn, amt, fee, referrer] of logs) {
+      const u = user.toLowerCase();
+      const r = users.get(u) || { addr: user, swaps: 0, vol: 0n, fee: 0n };
+      r.swaps++; r.vol += inBnb(tokenIn, BigInt(amt)); r.fee += inBnb(tokenIn, BigInt(fee));
+      users.set(u, r);
+      if (referrer.toLowerCase() !== ZERO) {
+        const k = referrer.toLowerCase();
+        refEarned.set(k, (refEarned.get(k) || 0n) + inBnb(tokenIn, (BigInt(amt) * BigInt(refBps)) / 10000n));
+      }
+    }
+    // 1 point per 0.00001 BNB of fees paid, so wash trading costs real fees.
+    const pts = (fee) => Number(fee / 10000000000000n);
+    const rows = [...users.values()].sort((a, b) => (b.fee > a.fee ? 1 : b.fee < a.fee ? -1 : 0));
+    const me = account?.toLowerCase();
+    const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+    $("lbBody").innerHTML = rows.length
+      ? rows.slice(0, 20).map((r, i) => `<tr class="${r.addr.toLowerCase() === me ? "you" : ""}"><td>${i + 1}</td><td>${short(r.addr)}</td><td>${r.swaps}</td><td>${fmt(r.vol, 4)}</td><td>${pts(r.fee).toLocaleString("en-US")}</td></tr>`).join("")
+      : `<tr><td colspan="5" class="muted">No swaps yet. Be the first.</td></tr>`;
+    $("lbNote").textContent = `${logs.length} swaps · volume in tBNB · tCNDR valued at today's pool price`;
+    if (me) {
+      const mine = users.get(me); const rank = rows.findIndex((r) => r.addr.toLowerCase() === me);
+      $("mVol").textContent = mine ? fmt(mine.vol, 4) + " tBNB" : "0";
+      $("mPts").textContent = mine ? pts(mine.fee).toLocaleString("en-US") : "0";
+      $("mRank").textContent = rank >= 0 ? "#" + (rank + 1) : "—";
+      $("mRef").textContent = fmt(refEarned.get(me) || 0n, 6) + " tBNB";
+      const link = location.origin + location.pathname + "?ref=" + account;
+      $("refLink").value = link; $("copyRef").disabled = false;
+    }
+  } catch (e) { $("lbNote").textContent = "Couldn't load the board: " + (e.shortMessage || e.message); }
+  boardBusy = false;
+}
+$("copyRef").onclick = async () => { try { await navigator.clipboard.writeText($("refLink").value); $("copyRef").textContent = "Copied"; setTimeout(() => ($("copyRef").textContent = "Copy"), 1500); } catch { $("refLink").select(); } };
 quote();

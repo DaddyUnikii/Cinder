@@ -7,5 +7,6 @@
   "stakingSink": "0xE5e6039266520D60757FbCdc104Ef68c91994D70",
   "burnSink": "0xe94d46f87ffD46fE4e0B642f7dFB2C5aa0B72C40",
   "router": "0x35315f8Dd71e965467F4A9A1f49e43A5719702B3",
-  "treasury": "0x5f37b2286c06CD6956eE9558d0ee3eC79f3F2b9e"
+  "treasury": "0x5f37b2286c06CD6956eE9558d0ee3eC79f3F2b9e",
+  "routerDeployBlock": 140012030
 }
