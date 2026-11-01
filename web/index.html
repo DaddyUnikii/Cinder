@@ -10,7 +10,7 @@
 <body>
 <header>
   <div class="brand"><span class="flame">◆</span> Cinder <span class="tag">testnet</span></div>
-  <nav><button data-tab="swap" class="on">Swap</button><button data-tab="stake">Stake</button></nav>
+  <nav><button data-tab="swap" class="on">Swap</button><button data-tab="stake">Stake</button><button data-tab="board">Board</button></nav>
   <button id="connect" class="ghost">Connect</button>
 </header>
 
@@ -45,6 +45,20 @@
     <button id="stakeBtn" class="primary" disabled>Connect wallet</button>
     <div class="row pend"><span>Rewards <b id="pending">0</b> tBNB</span><button id="claim" class="ghost" disabled>Claim</button></div>
     <p class="status" id="stakeStatus"></p>
+  </section>
+
+
+  <section id="board" class="card hidden">
+    <div class="row head"><h2>Leaderboard</h2><span class="muted">Points = fees paid</span></div>
+    <div class="me" id="me">
+      <div><span class="muted">Your volume</span><b id="mVol">—</b></div>
+      <div><span class="muted">Your points</span><b id="mPts">—</b></div>
+      <div><span class="muted">Rank</span><b id="mRank">—</b></div>
+      <div><span class="muted">Referral earned</span><b id="mRef">—</b></div>
+    </div>
+    <div class="row reflink"><input id="refLink" readonly placeholder="Connect to get your referral link" /><button id="copyRef" class="ghost" disabled>Copy</button></div>
+    <table class="lb"><thead><tr><th>#</th><th>Wallet</th><th>Swaps</th><th>Volume</th><th>Points</th></tr></thead><tbody id="lbBody"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table>
+    <p class="muted small" id="lbNote"></p>
   </section>
 
   <section class="stats" id="stats">
